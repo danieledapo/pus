@@ -92,7 +92,6 @@ class S18022022Sketch(vsketch.SketchClass):
                 )
 
             for x in np.arange(xr - 0.9, xr, 0.2):
-                print((x - xr + 0.9) / 0.9)
                 lines.append(
                     LineString(
                         [
