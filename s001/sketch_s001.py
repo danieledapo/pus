@@ -32,12 +32,15 @@ def unit():
 
 
 class S001Sketch(vsketch.SketchClass):
+    n = vsketch.Param(100)
+    nballs = vsketch.Param(20)
+
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a4", landscape=False)
         vsk.scale("13cm")
 
         self.metaballs = []
-        for _ in range(20):
+        for _ in range(self.nballs):
             if not self.metaballs:
                 self.metaballs.append((0, 0, 0, 0.2))
                 continue
@@ -52,8 +55,8 @@ class S001Sketch(vsketch.SketchClass):
                     break
 
         drawn = []
-        for z in np.linspace(-1, 1, 100):
-            cs = self.slice(z, 100)
+        for z in np.linspace(-1, 1, self.n):
+            cs = self.slice(z, self.n)
 
             for c in cs:
                 if len(c) <= 2:
@@ -83,16 +86,15 @@ class S001Sketch(vsketch.SketchClass):
                     d = smin(dd, d, 0.15)
 
                 grid[-1].append(d)
-        grid = np.asarray(grid)
 
         cs = []
-        for c in find_contours(grid, 0.1):
+        for c in find_contours(np.asarray(grid), 0.1):
             cs.append([(-1 + 2 * x / n, -1 + 2 * y / n) for x, y in c])
 
         return cs
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
-        vsk.vpype("linemerge linesimplify reloop linesort")
+        vsk.vpype("linemerge -t 0.5 linesimplify reloop linesort")
 
 
 if __name__ == "__main__":
