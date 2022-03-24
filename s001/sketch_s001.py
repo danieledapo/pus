@@ -20,6 +20,12 @@ def smin(a, b, k):
     return min(a, b) - h * h * k * (1.0 / 4.0)
 
 
+def smax(d1, d2, k):
+    h = 0.5 - 0.5 * (d2 + d1) / k
+    h = max(min(h, 1), 0)
+    return ((1 - h) * d2 + h * (-d1)) + k * h * (1.0 - h)
+
+
 def unit():
     phi = np.random.uniform(0, np.pi * 2)
     costheta = np.random.uniform(-1, 1)
@@ -33,7 +39,7 @@ def unit():
 
 class S001Sketch(vsketch.SketchClass):
     n = vsketch.Param(100)
-    nballs = vsketch.Param(20)
+    nballs = vsketch.Param(18)
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a4", landscape=False)
@@ -50,8 +56,10 @@ class S001Sketch(vsketch.SketchClass):
                 dx, dy, dz = unit()
                 l = r + vsk.random(0.05, 0.25)
                 xx, yy, zz = x + dx * l, y + dy * l, z + dz * l
-                if -1 <= xx <= 1 and -1 <= yy <= 1 and -1 <= zz <= 1:
-                    self.metaballs.append((xx, yy, zz, vsk.random(0.05, 0.1)))
+                rr = vsk.random(0.05, 0.1)
+
+                if all(-1 <= c + rr <= 1 and -1 <= c - rr <= 1 for c in (xx, yy, zz)):
+                    self.metaballs.append((xx, yy, zz, rr))
                     break
 
         drawn = []
@@ -77,19 +85,22 @@ class S001Sketch(vsketch.SketchClass):
 
     def slice(self, z, n):
         grid = []
-        for y in np.linspace(-1, 1, n):
+        for y in np.linspace(-1, 1, n * 2):
             grid.append([])
-            for x in np.linspace(-1, 1, n):
+            for x in np.linspace(-1, 1, n * 2):
                 d = float("inf")
-                for mx, my, mz, r in self.metaballs:
-                    dd = math.sqrt((x - mx) ** 2 + (y - my) ** 2 + (z - mz) ** 2) - r
-                    d = smin(dd, d, 0.15)
+                for i, (mx, my, mz, r) in enumerate(self.metaballs):
+                    dd = math.hypot(x - mx, y - my, z - mz) - r
+                    if i % 3 == 0:
+                        d = smax(dd, d, 0.15)
+                    else:
+                        d = smin(dd, d, 0.15)
 
                 grid[-1].append(d)
 
         cs = []
         for c in find_contours(np.asarray(grid), 0.1):
-            cs.append([(-1 + 2 * x / n, -1 + 2 * y / n) for x, y in c])
+            cs.append([(-1 + 2 * x / n / 2, -1 + 2 * y / n / 2) for x, y in c])
 
         return cs
 
