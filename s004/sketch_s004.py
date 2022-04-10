@@ -16,13 +16,13 @@ class S004Sketch(vsketch.SketchClass):
         xs = [x for x in range(0, 10, 2) if vsk.random(1) > 0.3]
         random.shuffle(xs)
 
-        vsk.line(-2, 22, 12, 22)
+        vsk.line(-3, 22, 13, 22)
 
         for cx in xs:
-            l, t, r, b = cx - 2, 22 - vsk.random(5, 8), cx + 2, 22
+            l, t, r, b = cx - 3, 22 - vsk.random(9, 14), cx + 3, 22
 
             t1, t0 = vsk.random(0.2, 0.3), vsk.random(0.7, 0.8)
-            t2, t3 = vsk.random(0.3, 0.5), vsk.random(0.3, 0.5)
+            t2, t3 = vsk.random(0.2, 0.4), vsk.random(0.2, 0.4)
             t4 = vsk.random(0.4, 0.6)
 
             b0 = (vsk.lerp(l, r, t0), b)
