@@ -1,8 +1,6 @@
-from matplotlib.pyplot import text
 import math
 import random
 
-import vpype as vp
 import vsketch
 import numpy as np
 
@@ -19,7 +17,8 @@ def polar(
 
 class S007Sketch(vsketch.SketchClass):
     n = vsketch.Param(10)
-    shape = vsketch.Param("square", choices=["square", "circle"])
+    shape = vsketch.Param("square", choices=["square", "circle", "rect"])
+    cut_mode = vsketch.Param(1, choices=[1, 2])
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a4", landscape=False)
@@ -29,20 +28,41 @@ class S007Sketch(vsketch.SketchClass):
             shapes = [box(-8, -8, 8, 8)]
         elif self.shape == "circle":
             shapes = [Point(0, 0).buffer(8)]
+        elif self.shape == "rect":
+            shapes = [box(-8, -10, 8, 10)]
 
-        for _ in range(self.n):
+        for i in range(self.n):
             l, t, r, b = GeometryCollection(shapes).bounds
 
             cx, cy = (l + r) / 2, (t + b) / 2
-            r = 5 + max(r - l, b - t) / 2
 
-            a0 = vsk.random(math.pi * 2)
-            a1 = a0 + math.pi + vsk.random(-math.pi / 3, math.pi / 3)
+            if self.cut_mode == 1:
+                r = 5 + max(r - l, b - t) / 2
 
-            x0, y0 = polar(a0, r, c=(cx, cy))
-            x1, y1 = polar(a1, r, c=(cx, cy))
+                a0 = vsk.random(math.pi * 2)
+                a1 = a0 + math.pi + vsk.random(-math.pi / 3, math.pi / 3)
 
-            m = (y1 - y0) / (x1 - x0)
+                x0, y0 = polar(a0, r, c=(cx, cy))
+                x1, y1 = polar(a1, r, c=(cx, cy))
+            elif self.cut_mode == 2:
+                if i % 2 == 0:
+                    y0, y1 = t, b
+                    x0, x1 = (
+                        vsk.lerp(l, r, vsk.random(0.2, 0.45)),
+                        vsk.lerp(l, r, vsk.random(0.55, 0.8)),
+                    )
+                    if vsk.random(1) > 0.5:
+                        x0, x1 = x1, x0
+                else:
+                    x0, x1 = l, r
+                    y0, y1 = (
+                        vsk.lerp(t, b, vsk.random(0.2, 0.45)),
+                        vsk.lerp(t, b, vsk.random(0.55, 0.8)),
+                    )
+                    if vsk.random(1) > 0.5:
+                        y0, y1 = y1, y0
+
+            m = 0 if x1 == x0 else (y1 - y0) / (x1 - x0)
             q = y0 - m * x0
 
             ll = LineString([(x0, y0), (x1, y1)])
