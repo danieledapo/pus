@@ -9,6 +9,8 @@ from shapely.ops import *
 
 
 class S008Sketch(vsketch.SketchClass):
+    dual = vsketch.Param(False)
+
     def flow(self, freq: float, thick: float, rounding: float) -> MultiLineString:
         vsk = self.vsk
 
@@ -49,18 +51,30 @@ class S008Sketch(vsketch.SketchClass):
         vsk.scale("cm")
 
         freq = vsk.random(7, 10)
-
-        container = box(0, 0, 13, 18)
-        subject = Point(6.5, 9).buffer(5)
-
         rounding = int(vsk.random(1, 9) * 10)
 
-        lines1 = self.flow(freq, 0.60, rounding) & container
-        lines2 = self.flow(freq, 0.25, rounding) & container
+        lines1 = self.flow(freq, 0.60, rounding)
+        lines2 = self.flow(freq, 0.25, rounding)
 
-        vsk.geometry(container)
-        vsk.geometry(lines1 - subject)
-        vsk.geometry(lines2 & subject)
+        subject = Point(6.5, 9).buffer(5)
+        if self.dual:
+            container_left = box(0, 0, 6.4, 18)
+            container_right = box(6.6, 0, 13, 18)
+
+            vsk.geometry(container_left)
+            vsk.geometry(container_right)
+
+            vsk.geometry((lines1 - subject) & container_left)
+            vsk.geometry((lines2 & subject) & container_left)
+
+            vsk.geometry((lines2 - subject) & container_right)
+            vsk.geometry((lines1 & subject) & container_right)
+        else:
+            container = box(0, 0, 13, 18)
+            vsk.geometry(container)
+            vsk.geometry((lines1 - subject) & container)
+
+            vsk.geometry((lines2 & subject) & container)
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
         vsk.vpype("linemerge linesimplify reloop linesort")
