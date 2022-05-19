@@ -9,7 +9,7 @@ from shapely.ops import *
 
 
 class S008Sketch(vsketch.SketchClass):
-    dual = vsketch.Param(False)
+    dual = vsketch.Param(True)
 
     def flow(self, freq: float, thick: float, rounding: float) -> MultiLineString:
         vsk = self.vsk
@@ -53,22 +53,51 @@ class S008Sketch(vsketch.SketchClass):
         freq = vsk.random(7, 10)
         rounding = int(vsk.random(1, 9) * 10)
 
-        lines1 = self.flow(freq, 0.60, rounding)
+        lines1 = self.flow(freq, 0.80, rounding)
         lines2 = self.flow(freq, 0.25, rounding)
 
         subject = Point(6.5, 9).buffer(5)
+
         if self.dual:
-            container_left = box(0, 0, 6.4, 18)
-            container_right = box(6.6, 0, 13, 18)
+            container = box(0, 0, 13, 18)
 
-            vsk.geometry(container_left)
-            vsk.geometry(container_right)
+            t = vsk.random(0.2, 0.8)
+            container_left = Polygon(
+                [(0, 0), (vsk.lerp(0, 13, t), 0), (vsk.lerp(0, 13, 1 - t), 18), (0, 18)]
+            )
+            container_right = Polygon(
+                [
+                    (vsk.lerp(0, 13, t), 0),
+                    (13, 0),
+                    (13, 18),
+                    (vsk.lerp(0, 13, 1 - t), 18),
+                ]
+            )
 
-            vsk.geometry((lines1 - subject) & container_left)
-            vsk.geometry((lines2 & subject) & container_left)
+            vsk.geometry(container)
 
-            vsk.geometry((lines2 - subject) & container_right)
-            vsk.geometry((lines1 & subject) & container_right)
+            lines = [
+                (lines1 & container, container_left, True),
+                (lines2 & container, container_left, False),
+                (lines1 & container, container_right, False),
+                (lines2 & container, container_right, True),
+            ]
+
+            for lc, cont, subj_shading in lines:
+                for l in lc.geoms:
+                    ll = []
+                    for x, y in l.coords:
+                        if vsk.random(1) > 0.3 and (
+                            not cont.contains(Point(x, y))
+                            or subj_shading != subject.contains(Point(x, y))
+                        ):
+                            if ll:
+                                vsk.polygon(ll)
+                            ll.clear()
+                            continue
+                        ll.append((x, y))
+                    if ll:
+                        vsk.polygon(ll)
         else:
             container = box(0, 0, 13, 18)
             vsk.geometry(container)
@@ -77,7 +106,7 @@ class S008Sketch(vsketch.SketchClass):
             vsk.geometry((lines2 & subject) & container)
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
-        vsk.vpype("linemerge linesimplify reloop linesort")
+        vsk.vpype("color black linemerge linesimplify reloop linesort")
 
 
 if __name__ == "__main__":
