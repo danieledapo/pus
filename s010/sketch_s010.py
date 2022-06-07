@@ -36,30 +36,41 @@ class Field:
 
 
 class S011Sketch(vsketch.SketchClass):
+    step = vsketch.Param(1.0, 0.001)
+    maxlen = vsketch.Param(50, 1)
+    charges_min_dist = vsketch.Param(1.0)
+
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a5", landscape=False)
         vsk.scale("cm")
 
         charges = [
-            # (0.45, 0.55, -100),
-            # (0.55, 0.45, +100),
-            (0.45, 0.50, +100),
-            (0.55, 0.50, +100),
-            (0.50, 0.35, -100),
-            (0.50, 0.65, -10),
+            (0.45, 0.5, -100),
+            (0.55, 0.5, +100),
+            # (0.45, 0.50, +100),
+            # (0.55, 0.50, +100),
+            # (0.50, 0.35, -100),
+            # (0.50, 0.65, -10),
         ]
 
+        ncharges = int(vsk.random(1, 3)) * 2
         charges = []
-        for i in range(int(vsk.random(2, 10))):
+        while len(charges) != ncharges:
             x, y = vsk.random(0.1, 0.9), vsk.random(0.1, 0.9)
-            v = vsk.random(1, 10) * 10 * (1 if i % 2 == 0 else -1)
-            charges.append((x, y, v))
 
-        print(len(charges))
+            if (
+                charges
+                and min((math.hypot(x - xx, y - yy) for xx, yy, _ in charges))
+                < self.charges_min_dist / 18
+            ):
+                continue
+
+            v = vsk.random(1, 20) * 5 * (1 if len(charges) % 2 == 0 else -1)
+            charges.append((x, y, v))
 
         field = Field(charges, resolution=400)
 
-        vsk.stroke(2)
+        # vsk.stroke(2)
         # for y in np.arange(0, 18, 0.2):
         #     for x in np.arange(0, 13, 0.2):
         #         dx, dy = field.get(x / 13, y / 18)
@@ -68,30 +79,37 @@ class S011Sketch(vsketch.SketchClass):
 
         # for cx, cy, _ in charges:
         #     vsk.circle(cx * 13, cy * 18, 1)
-        vsk.stroke(1)
+        # vsk.stroke(1)
+        vsk.fill(1)
 
-        counts = {}
-        step = 0.5
+        existing = Point(-100, -100).buffer(0.1)
 
-        for y0 in np.arange(0, 18, step):
-            for x0 in np.arange(0, 13, step):
+        for y0 in np.arange(0, 18, self.step):
+            for x0 in np.arange(0, 13, self.step):
                 l = [(x0, y0)]
-                while len(l) < 50:
+                while len(l) < self.maxlen:
                     x, y = l[-1]
                     dx, dy = field.get(x / 13, y / 18)
                     x, y = x + dx * 0.1, y + dy * 0.1
 
-                    x, y = round(x, 2), round(y, 2)
-
                     if 0 <= x <= 13 and 0 <= y <= 18:
-                        counts[(x, y)] = counts.get((x, y), 0) + 1
-                        if counts[(x, y)] >= 2:
-                            break
                         l.append((x, y))
                         continue
                     break
 
-                vsk.polygon(l)
+                # vsk.polygon(l)
+                if len(l) < 2:
+                    continue
+
+                l = LineString(l).buffer(0.01) - existing
+                if not l.is_valid or l.is_empty:
+                    continue
+                vsk.geometry(l)
+                existing |= l.buffer(
+                    0.2, join_style=JOIN_STYLE.mitre, cap_style=CAP_STYLE.flat
+                )
+
+        vsk.vpype("squiggles")
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
         vsk.vpype("color black linemerge linesimplify reloop linesort")
