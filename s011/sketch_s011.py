@@ -1,7 +1,8 @@
 import vsketch
-import io
 import vpype as vp
 
+import io
+import math
 
 from shapely.geometry import *
 from shapely.affinity import *
@@ -10,7 +11,8 @@ from shapely.ops import *
 
 class Day25Sketch(vsketch.SketchClass):
     n = vsketch.Param(50, 1)
-    shape = vsketch.Param("circle", choices=["circle", "square", "heart"])
+    shape = vsketch.Param("circle", choices=["circle", "square", "triangle", "heart"])
+    renderer = vsketch.Param(0, 0, 1)
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a5", landscape=False)
@@ -37,18 +39,53 @@ class Day25Sketch(vsketch.SketchClass):
             l, t, r, b = shape.bounds
             shape = translate(shape, -(l + r) / 2, -(t + b) / 2)
         elif self.shape == "circle":
-            shape = scale(Point(0, 0).buffer(5.5), 1.5, 1)
+            shape = scale(Point(0, 0).buffer(5.5), [1.5, 1][self.renderer], 1)
         elif self.shape == "square":
             shape = box(-6, -6, 6, 6)
+        elif self.shape == "triangle":
+            shape = Polygon([(-6, 6), (0, -6), (6, 6)])
 
         l, t, r, b = shape.bounds
+
+        nattractors = int(vsk.random(1, 7))
+        attractors = []
+        while self.renderer == 1 and len(attractors) != nattractors:
+            x, y = vsk.random(l, r), vsk.random(t, b)
+            if not shape.contains(Point(x, y)):
+                continue
+            if (
+                not attractors
+                or min((math.hypot(a[0] - x, a[1] - y) for a in attractors)) > 2
+            ):
+                attractors.append((x, y))
 
         pts = []
         while len(pts) < self.n:
             x, y = vsk.random(l, r), vsk.random(t, b)
-            tt = 1 - (y - t) / (b - t)
-            if vsk.random(1) > tt**0.1:
-                pts.append((x, y))
+
+            if self.renderer == 0:
+                tt = 1 - (y - t) / (b - t)
+                if vsk.random(1) < tt**0.1:
+                    continue
+            else:
+                tt = min(
+                    (
+                        math.hypot((x - cx) / (r - l), (y - cy) / (b - t))
+                        for cx, cy in attractors
+                    ),
+                    default=1,
+                )
+                if tt < 0.05 or vsk.random(1) < 1 - tt:
+                    continue
+
+            pts.append((x, y))
+
+        # vsk.stroke(2)
+        # vsk.geometry(MultiPoint(attractors).buffer(0.5))
+        # vsk.geometry(MultiPoint(pts))
+        # vsk.geometry(shape)
+        # return
+        # vsk.stroke(1)
 
         for g in voronoi_diagram(MultiPoint(pts)).geoms:
             g = g & shape
@@ -56,9 +93,23 @@ class Day25Sketch(vsketch.SketchClass):
             if not g.is_valid or g.is_empty:
                 continue
             g = rotate(g, vsk.random(30))
-            ty = (g.centroid.y - t) / (b - t)
-            dd = vsk.random(3, 6)
-            g = translate(g, 0, dd * ty)
+
+            if self.renderer == 0:
+                ty = (g.centroid.y - t) / (b - t)
+                dd = vsk.random(3, 6)
+                g = translate(g, 0, dd * ty)
+            else:
+                dx, dy = 0, 0
+                for ax, ay in attractors:
+                    ll = math.hypot(ax - g.centroid.x, ay - g.centroid.y)
+                    dx += -(ax - g.centroid.x) * ll
+                    dy += -(ay - g.centroid.x) * ll
+                ll = math.hypot(dx, dy)
+                dx, dy = dx / ll, dy / ll
+
+                t = vsk.random(0.5, 1)
+                g = translate(g, t * dx, t * dy)
+
             vsk.geometry(g)
 
         vsk.vpype("layout -m 2cm a5")
