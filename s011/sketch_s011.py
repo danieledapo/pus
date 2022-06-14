@@ -101,7 +101,7 @@ class Day25Sketch(vsketch.SketchClass):
             else:
                 dx, dy = 0, 0
                 for ax, ay in attractors:
-                    ll = math.hypot(ax - g.centroid.x, ay - g.centroid.y)
+                    ll = math.hypot(ax - g.centroid.x, ay - g.centroid.x)
                     dx += -(ax - g.centroid.x) * ll
                     dy += -(ay - g.centroid.x) * ll
                 ll = math.hypot(dx, dy)
