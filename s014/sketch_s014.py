@@ -10,11 +10,14 @@ from shapely.ops import clip_by_rect
 
 
 class S014Sketch(vsketch.SketchClass):
+    block_hr = vsketch.Param(0.2, 0, 1)
     yreps = vsketch.Param(1, 0)
     xreps = vsketch.Param(4, 0)
+    min_xreps = vsketch.Param(1, 0)
+    erosion = vsketch.Param(0.5, 0, 1)
 
-    def decorations_tex(self, x0, y0, x1, y1):
-        tex = MultiLineString([[(x, 0), (x + 20, 50)] for x in np.arange(-20, x1, 0.1)])
+    def decorations_tex(self, x0, y0, x1, y1, d=0.1):
+        tex = MultiLineString([[(x, 0), (x + 20, 50)] for x in np.arange(-20, x1, d)])
         return clip_by_rect(tex, x0, y0, x1, y1)
 
     def small_shadow_tex(self, x0, y0, x1, y1):
@@ -29,7 +32,7 @@ class S014Sketch(vsketch.SketchClass):
             l = []
             for y in np.arange(y0, y1 + 0.1, 0.1):
                 t = max(0, 1 - (y - y0) / (y1 - y0))
-                if t <= self.vsk.random(0.5):
+                if t <= self.vsk.random(self.erosion):
                     l.append((x, y))
                 elif len(l) > 1:
                     lines.append(l)
@@ -80,7 +83,8 @@ class S014Sketch(vsketch.SketchClass):
                     ]
                 )
 
-            h = vsk.random(2, 6)
+            # h = vsk.random(2, 6)
+            h = vsk.random(w * self.block_hr / 2, w * self.block_hr)
             if y + h > maxy:
                 break
 
@@ -95,32 +99,14 @@ class S014Sketch(vsketch.SketchClass):
                     vsk.geometry(self.small_shadow_tex(-sw / 2, y, sw / 2, y + sh))
 
                 y += sh
-                h -= sh
 
             yreps = random.randrange(1, self.yreps + 1)
-            xreps = random.randrange(1, self.xreps + 1)
+            xreps = random.randrange(self.min_xreps, self.xreps + 1)
 
             ww = w / xreps
 
             x0 = -w / 2
             block = box(x0, y, x0 + ww, y + h)
-
-            # decorations
-            decorations = Polygon()
-            decs_tex = Polygon()
-            if vsk.random(1) > 0.4:
-                sx, sy = x0 + ww * 0.1, y + h * 0.1
-                dw, dh = ww * 0.8, h * 0.8
-                for _ in range(random.randrange(1, 3)):
-                    if dw > dh:
-                        sx = sx + dw / 2 if vsk.random(1) > 0.5 else sx
-                        dw /= 2
-                    else:
-                        sy = sy + dh / 2 if vsk.random(1) > 0.5 else sy
-                        dh /= 2
-
-                decorations = box(sx, sy, sx + dw, sy + dh)
-                decs_tex = self.decorations_tex(*decorations.bounds)
 
             # draw the block
             for i in range(yreps):
@@ -128,12 +114,8 @@ class S014Sketch(vsketch.SketchClass):
 
                 for j in range(xreps):
                     b = translate(block, j * ww, i * h)
-                    d = translate(decorations, j * ww, i * h)
-
                     vsk.geometry(b)
-                    vsk.geometry(d)
-                    vsk.geometry((concrete_tex & b) - d.buffer(0.1))
-                    vsk.geometry(translate(decs_tex, j * ww, i * h))
+                    vsk.geometry(concrete_tex & b)
 
                 y += h
                 if y > maxy:
