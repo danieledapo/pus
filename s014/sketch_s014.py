@@ -1,3 +1,20 @@
+#
+# Concrete Monoliths
+#
+# Raw concrete blocks stacked on top of one another to build monuments to the
+# Brutalist Gods.
+#
+# This is my entry for WCC Brutalism.
+#
+# My intention was to generate some brutalist towers or buildings but eventually
+# got lost in the details of windows and balconies. So, I decided to remove all
+# of the details and just keep the raw blocks of concrete which also feels more
+# in line with the brutalism idea :D.
+#
+# I focused more on the textures trying to find a good balance between dark and
+# light areas. Not quite sure I got there, but I kinda like the plots anyway.
+#
+
 import random
 
 import vsketch
@@ -6,25 +23,29 @@ import numpy as np
 
 from shapely.affinity import translate
 from shapely.geometry import MultiLineString, Polygon, box
-from shapely.ops import clip_by_rect
 
 
 class S014Sketch(vsketch.SketchClass):
-    block_hr = vsketch.Param(0.2, 0, 1)
-    yreps = vsketch.Param(1, 0)
-    xreps = vsketch.Param(4, 0)
-    min_xreps = vsketch.Param(1, 0)
-    erosion = vsketch.Param(0.5, 0, 1)
+    # sketch parameters
+    block_hr = vsketch.Param(0.2, 0, 1)  # aspect ratio of the blocks
+    yreps = vsketch.Param(1, 0)  # maximum number of block repetitions in Y
+    xreps = vsketch.Param(4, 0)  # maximum number of block repetitions in X
+    min_xreps = vsketch.Param(1, 0)  # minimum number of block repetitions in X
+    erosion = vsketch.Param(0.5, 0, 1)  # how much of the block is eroded
+    support = vsketch.Param(0.7, 0, 1)  # probability of drawing a support
 
-    def decorations_tex(self, x0, y0, x1, y1, d=0.1):
-        tex = MultiLineString([[(x, 0), (x + 20, 50)] for x in np.arange(-20, x1, d)])
-        return clip_by_rect(tex, x0, y0, x1, y1)
+    # texture of the support block
+    def support_tex(self, x0, y0, x1, y1):
+        lines = []
+        for y in np.arange(y0, y1, 0.13):
+            lines.append([(x0, y), (x1, y)])
 
-    def small_shadow_tex(self, x0, y0, x1, y1):
-        return MultiLineString(
-            [[(x0, y), (x1, y)] for y in np.arange(y0, y1, 0.13)]
-        ) | self.decorations_tex(x0, y0, x1, y1)
+        for x in np.arange(x0, x1, 0.13):
+            lines.append([(x, y0), (x, y1)])
 
+        return MultiLineString(lines)
+
+    # texture of all the simple concrete blocks
     def concrete_tex(self, x0, y0, x1, y1):
         lines = []
 
@@ -42,9 +63,9 @@ class S014Sketch(vsketch.SketchClass):
 
         return MultiLineString(lines)
 
+    # draw a filled shadow
     def draw_shadow(self, lastw, w, y, maxsh=0.7):
         vsk = self.vsk
-        vsk.fill(1)
         sh = vsk.random(0.1, maxsh)
         shadow = Polygon(
             [
@@ -54,6 +75,7 @@ class S014Sketch(vsketch.SketchClass):
                 (-w / 2, y + sh),
             ]
         )
+        vsk.fill(1)
         vsk.geometry(shadow)
         vsk.noFill()
         return sh
@@ -88,15 +110,16 @@ class S014Sketch(vsketch.SketchClass):
             if y + h > maxy:
                 break
 
-            if w > lastw:
-                if vsk.random(1) > 0.3:
+            # draw a shadow or a support
+            if y != 0 and vsk.random(1) < self.support:
+                if w > lastw:
                     sh = self.draw_shadow(lastw, w, y)
                 else:
                     sh = vsk.random(0.5, 1)
-                    sw = lastw * 0.8
+                    sw = w * 0.8
                     shadow = box(-sw / 2, y, sw / 2, y + sh)
                     vsk.geometry(shadow)
-                    vsk.geometry(self.small_shadow_tex(-sw / 2, y, sw / 2, y + sh))
+                    vsk.geometry(self.support_tex(-sw / 2, y, sw / 2, y + sh))
 
                 y += sh
 
@@ -108,14 +131,12 @@ class S014Sketch(vsketch.SketchClass):
             x0 = -w / 2
             block = box(x0, y, x0 + ww, y + h)
 
-            # draw the block
+            # draw and repeat the block
             for i in range(yreps):
-                concrete_tex = self.concrete_tex(x0, y, x0 + ww * xreps, y + h)
-
                 for j in range(xreps):
                     b = translate(block, j * ww, i * h)
                     vsk.geometry(b)
-                    vsk.geometry(concrete_tex & b)
+                    vsk.geometry(self.concrete_tex(*b.bounds))
 
                 y += h
                 if y > maxy:
@@ -130,6 +151,8 @@ class S014Sketch(vsketch.SketchClass):
         vsk.geometry(roof)
         vsk.geometry(self.concrete_tex(*roof.bounds))
         y += 0.4
+
+        # chimneys
         x0 = random.choice([1, -1]) * vsk.random(w * 0.25, w * 0.4)
         ch = vsk.random(1.4, 3)
         n = random.randrange(0, 4)
@@ -140,11 +163,16 @@ class S014Sketch(vsketch.SketchClass):
 
             chimney = box(xx, y, xx + 0.2, y + (i + 1) * ch / (n + 1))
             vsk.geometry(chimney)
-            vsk.geometry(self.small_shadow_tex(*chimney.bounds))
+            vsk.geometry(self.support_tex(*chimney.bounds))
 
+        # the squiggles command does all the work of deforming the paths so that
+        # they have this hand-drawn feel to them
         vsk.vpype("layout -m 2cm a4 squiggles")
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
+        # these are optimizations really useful when plotting because here we're
+        # merging and simplifying the paths and even re-arranging the paths to
+        # minimize pen-up travel distance! Thanks, vpype :)!
         vsk.vpype("color black linemerge linesimplify reloop linesort -t -p 10000")
 
 
