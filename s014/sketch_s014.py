@@ -86,6 +86,8 @@ class S014Sketch(vsketch.SketchClass):
 
         vsk.scale(1, -1)
 
+        vsk.penWidth("0.2mm")
+
         maxy = 24
 
         lastw = 1e30
