@@ -27,6 +27,7 @@ from shapely.geometry import MultiLineString, Polygon, box
 
 class S014Sketch(vsketch.SketchClass):
     # sketch parameters
+    paper = vsketch.Param("a4", choices=["a4", "a5"])
     block_hr = vsketch.Param(0.2, 0, 1)  # aspect ratio of the blocks
     yreps = vsketch.Param(1, 0)  # maximum number of block repetitions in Y
     xreps = vsketch.Param(4, 0)  # maximum number of block repetitions in X
@@ -81,19 +82,24 @@ class S014Sketch(vsketch.SketchClass):
         return sh
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
-        vsk.size("a4", landscape=False)
+        vsk.size(self.paper, landscape=False)
         vsk.scale("cm")
 
         vsk.scale(1, -1)
 
         vsk.penWidth("0.2mm")
 
-        maxy = 24
+        if self.paper == "a5":
+            maxy = 21
+            maxx = 15
+        else:
+            maxy = 24
+            maxx = 18
 
         lastw = 1e30
         y = 0
 
-        vsk.line(-9, 0, 9, 0)
+        vsk.line(-maxx / 2, 0, maxx / 2, 0)
 
         while True:
             if y == 0:
@@ -103,7 +109,7 @@ class S014Sketch(vsketch.SketchClass):
                     [
                         dx
                         for dx in range(-3, 4, 2)
-                        if dx != 0 and 1 <= lastw + dx <= 18 and lastw + dx >= 3
+                        if dx != 0 and 1 <= lastw + dx <= maxx and lastw + dx >= 3
                     ]
                 )
 
@@ -169,7 +175,7 @@ class S014Sketch(vsketch.SketchClass):
 
         # the squiggles command does all the work of deforming the paths so that
         # they have this hand-drawn feel to them
-        vsk.vpype("layout -m 2cm a4 squiggles")
+        vsk.vpype(f"layout -m 2cm {self.paper} squiggles")
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
         # these are optimizations really useful when plotting because here we're
