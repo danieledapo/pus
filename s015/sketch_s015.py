@@ -16,13 +16,15 @@ def unit(x, y):
 
 def line_segment(l: LineString, start: float, end: float) -> LineString:
     ll = []
-    for d in np.arange(start, end, 0.1):
+    for d in np.arange(start, end + 0.1, 0.1):
         p = l.interpolate(d)
         ll.append((p.x, p.y))
     return LineString(ll)
 
 
 class S015Sketch(vsketch.SketchClass):
+    squiggliness = vsketch.Param(0.3, 0.0)
+
     def perturb(self, l: LineString, xlate=0.2) -> LineString:
         return translate(
             rotate(l, self.vsk.random(-3, 3)),
@@ -48,6 +50,23 @@ class S015Sketch(vsketch.SketchClass):
 
         if len(ll) > 1:
             yield LineString(ll)
+
+    def squiggle(self, l: LineString) -> LineString:
+        x, y = [], []
+
+        for d in np.arange(0, l.length + 0.1, 0.1):
+            p = l.interpolate(d)
+            x.append(p.x)
+            y.append(p.y)
+
+        x, y = np.array(x), np.array(y)
+
+        if self.squiggliness > 0:
+            a = self.vsk.noise(x, y, grid_mode=False) * (np.pi * 2)
+            x += np.cos(a) * self.squiggliness
+            y += np.sin(a) * self.squiggliness
+
+        return LineString(zip(x, y))
 
     def shading_lines(
         self,
@@ -82,7 +101,7 @@ class S015Sketch(vsketch.SketchClass):
                 )
 
             if maxll is not None:
-                yield maxll
+                yield self.squiggle(maxll)
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a5", landscape=False)
@@ -94,7 +113,7 @@ class S015Sketch(vsketch.SketchClass):
 
         n = random.randrange(120 * 2, 120 * 4)
         div = random.randrange(100, 200)
-        da = np.radians(3 or vsk.random(2, 4))
+        da = np.radians(3)
 
         geos = []
 
@@ -105,11 +124,15 @@ class S015Sketch(vsketch.SketchClass):
             r += max(0.02, r / div) * (1 + (i / n) * 0.5)
 
         lg = LineString(l)
+        lg = self.squiggle(lg)
         geos.append(lg)
 
         for _ in range(5):
             center = line_segment(lg, 0, vsk.random(4, 8))
             geos.append(self.perturb(center, xlate=0.08))
+
+            last = line_segment(lg, max(0, lg.length - vsk.random(60, 100)), lg.length)
+            geos.append(self.perturb(last, xlate=0.08))
 
         for _ in range(5):
             lg = scale(lg, 0.98, 0.98)
@@ -124,7 +147,7 @@ class S015Sketch(vsketch.SketchClass):
             for lp in self.break_sometimes(ll):
                 geos.append(lp)
 
-        ls = list(self.shading_lines(lg, step=lg.length / nsegs, maxdist=100))[-1]
+        ls = list(self.shading_lines(lg, step=lg.length / nsegs, maxdist=999999))[-1]
         geos.append(ls)
         for _ in range(3):
             geos.append(self.perturb(ls, xlate=0.1))
@@ -145,7 +168,7 @@ class S015Sketch(vsketch.SketchClass):
 
         vsk.geometry(geos)
 
-        vsk.vpype("squiggles -a 1.5mm layout -m 2cm a5")
+        vsk.vpype("layout -m 2cm a5")
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
         vsk.vpype("color black linemerge -t 0.2mm linesimplify reloop linesort")
