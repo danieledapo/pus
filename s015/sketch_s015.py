@@ -1,3 +1,17 @@
+#
+# Sketchy nautilus fossils
+#
+# This is my entry for WCC Spirals.
+#
+# I tried to create a generator of nautilus-like fossils drawn in a sketchy way,
+# but I didn't quite get where I wanted. Oh well.
+#
+# Also, incidentally this can work as a poop generator :D.
+#
+# I tried to focus more on the texture and on the shading to give a sort of
+# hand-drawn effect, but didn't really get there.
+#
+
 import random
 from typing import Iterator
 
@@ -15,6 +29,7 @@ def unit(x, y):
 
 
 def line_segment(l: LineString, start: float, end: float) -> LineString:
+    """Return the line segment that goes from the start to the end distances"""
     swap = start > end
     if swap:
         start, end = end, start
@@ -28,6 +43,7 @@ def line_segment(l: LineString, start: float, end: float) -> LineString:
 
 
 def fit_in(lg: LineString, w: int, h: int) -> LineString:
+    """Scale the given geometry to fit the given height and width"""
     l, t, r, b = lg.bounds
     sf = min(w, h) / max(b - t, r - l)
     return scale(lg, sf, sf, origin=(0, 0))
@@ -36,14 +52,16 @@ def fit_in(lg: LineString, w: int, h: int) -> LineString:
 class S015Sketch(vsketch.SketchClass):
     squiggliness = vsketch.Param(0.2, 0.0)
 
-    def perturb(self, l: LineString, xlate=0.2, rot=3) -> LineString:
+    def perturb(self, l: LineString, xlate=0.1, rot=3) -> LineString:
+        """Return a roto-translated copy of a line according to the limits"""
         return translate(
             rotate(l, self.vsk.random(-rot, rot)),
             self.vsk.random(-xlate, xlate),
             self.vsk.random(-xlate, xlate),
         )
 
-    def break_sometimes(self, l: LineString, step=0.05) -> Iterator[LineString]:
+    def break_sometimes(self, l: LineString, step=0.08) -> Iterator[LineString]:
+        """Break the given continuous lines into small segments"""
         ll = []
         for d in np.arange(0, l.length + step, step):
             if self.vsk.random(1) > 0.5:
@@ -57,6 +75,7 @@ class S015Sketch(vsketch.SketchClass):
             yield LineString(ll)
 
     def squiggle(self, l: LineString, s: float = None) -> LineString:
+        """Apply a squiggle filter to a line so that it has a hand-drawn feel"""
         s = s if s is not None else self.squiggliness
         if s <= 0:
             return l
@@ -82,7 +101,9 @@ class S015Sketch(vsketch.SketchClass):
         focus: tuple[float, float] = (0, 0),
         step: float = 5,
         maxdist=None,
+        returnd=False,
     ):
+        """Return the shading lines going from the line to the focus point"""
         for t in np.arange(0, l.length + step, step):
             x1, y1 = l.interpolate(t).coords[0]
             dx, dy = unit(focus[0] - x1, focus[1] - y1)
@@ -109,7 +130,10 @@ class S015Sketch(vsketch.SketchClass):
                 )
 
             if maxll is not None:
-                yield maxll
+                if returnd:
+                    yield (t, maxll)
+                else:
+                    yield maxll
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
         vsk.size("a5", landscape=True)
@@ -118,13 +142,14 @@ class S015Sketch(vsketch.SketchClass):
         beta = vsk.random(0.1, 0.3)
         turns = random.randrange(2, 5)
 
-        # logarithmic spiral
+        # nautilus fossils follow a mostly logarithmic spiral
         thetas = np.arange(0, np.pi * 2 * turns, np.radians(3))
         rrs = np.exp(thetas * beta)
         lg = LineString(zip(rrs * np.cos(thetas), rrs * np.sin(thetas)))
 
         lg = self.squiggle(fit_in(lg, 15, 21))
-        vsk.geometry(lg)
+        for _ in range(6):
+            vsk.geometry(lg)
 
         breakd = 1e30
         for d in np.arange(lg.length, 0, -0.1):
@@ -133,15 +158,18 @@ class S015Sketch(vsketch.SketchClass):
                 breakd = d
                 break
 
-        for _ in range(8):
+        # pass multiple times over the start and end portions to add a bit more
+        # depth
+        for _ in range(4):
             center = line_segment(lg, 0, vsk.random(0.75 * breakd, breakd * 1.25))
-            vsk.geometry(self.perturb(center, xlate=0.08))
+            vsk.geometry(self.perturb(center, xlate=0.08, rot=0.5))
 
             last = line_segment(
                 lg, max(0, vsk.random(1.25 * breakd, 1.75 * breakd)), lg.length
             )
-            vsk.geometry(self.perturb(last, xlate=0.08, rot=0))
+            vsk.geometry(self.perturb(last, xlate=0.08, rot=0.5))
 
+        # draw the spiral multiple times to add more texture
         lgg = lg
         for _ in range(8):
             lgg = scale(lgg, 0.98, 0.98)
@@ -149,13 +177,17 @@ class S015Sketch(vsketch.SketchClass):
                 for ll in self.break_sometimes(self.perturb(lgg)):
                     vsk.geometry(ll)
 
+        # draw the segments towards the center of the spiral
         nsegs = vsk.random(10, 30)
-        for ll in self.shading_lines(lg, step=lg.length / nsegs):
-            for _ in range(2):
+        for t, ll in self.shading_lines(lg, step=lg.length / nsegs, returnd=True):
+            for _ in range(2 if 1.25 * breakd <= t <= 1.5 * breakd else 4):
                 ls = self.squiggle(self.perturb(ll), self.squiggliness)
                 for lp in self.break_sometimes(ls):
                     vsk.geometry(lp)
+                    vsk.geometry(lp)
+                    vsk.geometry(lp)
 
+        # draw the final edge multiple times still to achieve the shading effect
         ls = list(self.shading_lines(lg, step=lg.length, maxdist=9999))[-1]
         ls = self.squiggle(ls, self.squiggliness)
         vsk.geometry(ls)
