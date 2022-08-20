@@ -15,33 +15,38 @@ def unit(x, y):
 
 
 def line_segment(l: LineString, start: float, end: float) -> LineString:
+    swap = start > end
+    if swap:
+        start, end = end, start
     ll = []
     for d in np.arange(start, end + 0.1, 0.1):
         p = l.interpolate(d)
         ll.append((p.x, p.y))
+    if swap:
+        ll = ll[::-1]
     return LineString(ll)
 
 
-class S015Sketch(vsketch.SketchClass):
-    squiggliness = vsketch.Param(0.3, 0.0)
+def fit_in(lg: LineString, w: int, h: int) -> LineString:
+    l, t, r, b = lg.bounds
+    sf = min(w, h) / max(b - t, r - l)
+    return scale(lg, sf, sf, origin=(0, 0))
 
-    def perturb(self, l: LineString, xlate=0.2) -> LineString:
+
+class S015Sketch(vsketch.SketchClass):
+    squiggliness = vsketch.Param(0.2, 0.0)
+
+    def perturb(self, l: LineString, xlate=0.2, rot=3) -> LineString:
         return translate(
-            rotate(l, self.vsk.random(-3, 3)),
+            rotate(l, self.vsk.random(-rot, rot)),
             self.vsk.random(-xlate, xlate),
             self.vsk.random(-xlate, xlate),
         )
 
-    def break_sometimes(
-        self, l: LineString, step=0.1, select=None
-    ) -> Iterator[LineString]:
-        if select is None:
-            select = lambda t: self.vsk.random(1) > 0.5
-
+    def break_sometimes(self, l: LineString, step=0.05) -> Iterator[LineString]:
         ll = []
         for d in np.arange(0, l.length + step, step):
-            t = d / (l.length + step)
-            if select(t):
+            if self.vsk.random(1) > 0.5:
                 ll.append(l.interpolate(d))
             else:
                 if len(ll) > 1:
@@ -51,7 +56,11 @@ class S015Sketch(vsketch.SketchClass):
         if len(ll) > 1:
             yield LineString(ll)
 
-    def squiggle(self, l: LineString) -> LineString:
+    def squiggle(self, l: LineString, s: float = None) -> LineString:
+        s = s if s is not None else self.squiggliness
+        if s <= 0:
+            return l
+
         x, y = [], []
 
         for d in np.arange(0, l.length + 0.1, 0.1):
@@ -61,10 +70,9 @@ class S015Sketch(vsketch.SketchClass):
 
         x, y = np.array(x), np.array(y)
 
-        if self.squiggliness > 0:
-            a = self.vsk.noise(x, y, grid_mode=False) * (np.pi * 2)
-            x += np.cos(a) * self.squiggliness
-            y += np.sin(a) * self.squiggliness
+        a = self.vsk.noise(x, y, grid_mode=False) * (np.pi * 2)
+        x += np.cos(a) * s
+        y += np.sin(a) * s
 
         return LineString(zip(x, y))
 
@@ -101,74 +109,60 @@ class S015Sketch(vsketch.SketchClass):
                 )
 
             if maxll is not None:
-                yield self.squiggle(maxll)
+                yield maxll
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
-        vsk.size("a5", landscape=False)
+        vsk.size("a5", landscape=True)
         vsk.scale("cm")
 
-        l = []
-        a = 0
-        r = 0.3
+        beta = vsk.random(0.1, 0.3)
+        turns = random.randrange(2, 5)
 
-        n = random.randrange(120 * 2, 120 * 4)
-        div = random.randrange(100, 200)
-        da = np.radians(3)
+        # logarithmic spiral
+        thetas = np.arange(0, np.pi * 2 * turns, np.radians(3))
+        rrs = np.exp(thetas * beta)
+        lg = LineString(zip(rrs * np.cos(thetas), rrs * np.sin(thetas)))
 
-        geos = []
+        lg = self.squiggle(fit_in(lg, 15, 21))
+        vsk.geometry(lg)
 
-        for i in range(n):
-            x, y = np.cos(a) * r, np.sin(a) * r
-            l.append((x, y))
-            a += da
-            r += max(0.02, r / div) * (1 + (i / n) * 0.5)
+        breakd = 1e30
+        for d in np.arange(lg.length, 0, -0.1):
+            p = lg.interpolate(d)
+            if p.x < 0 and p.y > 0:
+                breakd = d
+                break
 
-        lg = LineString(l)
-        lg = self.squiggle(lg)
-        geos.append(lg)
+        for _ in range(8):
+            center = line_segment(lg, 0, vsk.random(0.75 * breakd, breakd * 1.25))
+            vsk.geometry(self.perturb(center, xlate=0.08))
 
-        for _ in range(5):
-            center = line_segment(lg, 0, vsk.random(4, 8))
-            geos.append(self.perturb(center, xlate=0.08))
+            last = line_segment(
+                lg, max(0, vsk.random(1.25 * breakd, 1.75 * breakd)), lg.length
+            )
+            vsk.geometry(self.perturb(last, xlate=0.08, rot=0))
 
-            last = line_segment(lg, max(0, lg.length - vsk.random(60, 100)), lg.length)
-            geos.append(self.perturb(last, xlate=0.08))
-
-        for _ in range(5):
-            lg = scale(lg, 0.98, 0.98)
+        lgg = lg
+        for _ in range(8):
+            lgg = scale(lgg, 0.98, 0.98)
             for _ in range(2):
-                for ll in self.break_sometimes(self.perturb(lg)):
-                    geos.append(ll)
+                for ll in self.break_sometimes(self.perturb(lgg)):
+                    vsk.geometry(ll)
 
-        lg = LineString(l)
-
-        nsegs = 50
+        nsegs = vsk.random(10, 30)
         for ll in self.shading_lines(lg, step=lg.length / nsegs):
-            for lp in self.break_sometimes(ll):
-                geos.append(lp)
+            for _ in range(2):
+                ls = self.squiggle(self.perturb(ll), self.squiggliness)
+                for lp in self.break_sometimes(ls):
+                    vsk.geometry(lp)
 
-        ls = list(self.shading_lines(lg, step=lg.length / nsegs, maxdist=999999))[-1]
-        geos.append(ls)
-        for _ in range(3):
-            geos.append(self.perturb(ls, xlate=0.1))
+        ls = list(self.shading_lines(lg, step=lg.length, maxdist=9999))[-1]
+        ls = self.squiggle(ls, self.squiggliness)
+        vsk.geometry(ls)
+        for _ in range(7):
+            vsk.geometry(self.perturb(ls, xlate=0.05, rot=1))
 
-        geos = GeometryCollection(geos)
-
-        geos = rotate(
-            geos,
-            -np.arctan2(
-                ls.coords[-1][1] - ls.coords[0][1], ls.coords[-1][0] - ls.coords[0][0]
-            ),
-            use_radians=True,
-        )
-
-        l, t, r, b = geos.bounds
-        if r - l > b - t:
-            geos = rotate(geos, -90)
-
-        vsk.geometry(geos)
-
-        vsk.vpype("layout -m 2cm a5")
+        vsk.vpype("layout -l -m 2cm a5")
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
         vsk.vpype("color black linemerge -t 0.2mm linesimplify reloop linesort")
