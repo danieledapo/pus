@@ -30,6 +30,7 @@ class S016Sketch(vsketch.SketchClass):
     maxr = vsketch.Param(1.2)
     linemargin = vsketch.Param(1)
     tripadding = vsketch.Param(0)
+    background = vsketch.Param(1)
 
     def viewbox(self):
         return box(self.padding, self.padding, 15 - self.padding, 21 - self.padding)
@@ -199,7 +200,9 @@ class S016Sketch(vsketch.SketchClass):
                 0.5, cap_style=CAP_STYLE.flat, join_style=JOIN_STYLE.bevel
             )
 
-        boxes = [quads[1], quads[2], quads[0] | quads[1], quads[0] | quads[2]]
+        boxes = []
+        if self.background:
+            boxes = [quads[1], quads[2], quads[0] | quads[1], quads[0] | quads[2]]
         for q in boxes:
             l, t, r, b = q.bounds
             w, h = r - l, b - t
