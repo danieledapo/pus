@@ -31,7 +31,7 @@ def arc_points(x: float, y: float, r: float, a0: float, a1: float):
     # yield polar(a1, r, c=(x, y))
 
 
-def bit_on_count(n: int) -> int:
+def bits_on(n: int) -> int:
     return bin(n)[2:].count("1")
 
 
@@ -39,6 +39,7 @@ class S017Sketch(vsketch.SketchClass):
     n = vsketch.Param(3)
     grid = vsketch.Param(1)
     bits = vsketch.Param(-1)
+    page = vsketch.Param("a4", choices=["a4", "a5"])
 
     def draw_bits(self, bits: int, r: int, c=(0, 0)):
         points = []
@@ -79,13 +80,17 @@ class S017Sketch(vsketch.SketchClass):
         blob, circles = GeometryCollection([blob]), GeometryCollection(circles)
 
         nbits = ((1 << self.n) - 1) ^ bits
-        if bit_on_count(bits) > bit_on_count(nbits):
+        if bits_on(bits) > bits_on(nbits):
             blob, circles = circles, blob
 
         return blob, circles
 
     def draw(self, vsk: vsketch.Vsketch) -> None:
-        vsk.size("a4", landscape=False)
+        w, h = 18, 25
+        if self.page == "a5":
+            w, h = 12, 18
+
+        vsk.size(self.page, landscape=False)
         vsk.scale("cm")
 
         vsk.penWidth("0.2mm")
@@ -125,20 +130,21 @@ class S017Sketch(vsketch.SketchClass):
 
         l, t, r, b = GeometryCollection(list(blacks.geoms) + list(whites.geoms)).bounds
         o = (l + r) / 2, (t + b) / 2
-        sf = min(25 / (b - t), 18 / (r - l))
+        sf = min(h / (b - t), w / (r - l))
 
         whites = scale(whites, sf, sf, origin=o)
         blacks = scale(blacks, sf, sf, origin=o)
 
         vsk.fill(1)
-        vsk.geometry(blacks)
+        for b in range(1):
+            vsk.geometry(blacks.buffer(-0.1 * b))
         vsk.noFill()
 
         vsk.strokeWeight(3)
         vsk.geometry(whites)
 
     def finalize(self, vsk: vsketch.Vsketch) -> None:
-        vsk.vpype("linemerge linesimplify reloop linesort")
+        vsk.vpype("color black linemerge linesimplify reloop linesort")
 
 
 if __name__ == "__main__":
