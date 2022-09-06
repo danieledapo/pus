@@ -99,15 +99,14 @@ def bits_on(n: int) -> int:
 
 class S017Sketch(vsketch.SketchClass):
     n = vsketch.Param(3)
-    grid = vsketch.Param(1)
-    bits = vsketch.Param(-1)
+    mode = vsketch.Param("grid")
     page = vsketch.Param("a4", choices=["a4", "a5"])
 
-    def draw_bits(self, bits: int, r: int, c=(0, 0)):
+    def draw_bits(self, bits: int, n: int, r: int = 1, c=(0, 0)):
         points = []
         circles = []
 
-        angs = [i * math.tau / self.n for i in range(self.n)]
+        angs = [i * math.tau / n for i in range(n)]
 
         t0 = 0.5 if len(angs) % 2 != 0 else self.vsk.random(1 / math.sqrt(2), 0.5)
         t1 = 1 - t0
@@ -159,36 +158,44 @@ class S017Sketch(vsketch.SketchClass):
 
         maxn = 1 << self.n
 
-        if self.grid and self.bits < 0:
-            blacks = []
-            whites = []
+        if self.mode == "grid":
+            ns = list(range(maxn))
+            nbits = [self.n for _ in ns]
+        elif self.mode == "random":
+            ns = [random.randrange(maxn)]
+            nbits = [self.n]
+        else:
+            ns = [int(s) for p in self.mode.strip().split(",") for s in p.split() if s]
+            nbits = [max(self.n, len(bin(n)[2:])) for n in ns]
 
-            rows, cols = None, None
-            mind = None
-            for ci in range(0, self.n):
-                cc = 1 << ci
-                rr = (1 << self.n) // cc
+        if not ns:
+            return
+
+        rows, cols = None, None
+        mind = None
+        for rr in range(len(ns) + 1):
+            for cc in range(len(ns) + 1):
                 d = abs(rr - cc)
+                if rr * cc < len(ns):
+                    continue
+
                 if mind is None or d < mind:
                     rows, cols = rr, cc
                     mind = d
 
-            for row in range(rows):
-                for col in range(cols):
-                    bits = row * cols + col
+        blacks = []
+        whites = []
+        for row in range(rows):
+            for col in range(cols):
+                i = row * cols + col
+                if i >= len(ns):
+                    continue
 
-                    if bits >= maxn:
-                        continue
+                b, c = self.draw_bits(ns[i], nbits[i], c=(col * 4, row * 4))
 
-                    b, c = self.draw_bits(bits, 1, c=(col * 4, row * 4))
-
-                    blacks.extend(b.geoms)
-                    whites.extend(c.geoms)
-
-            blacks, whites = GeometryCollection(blacks), GeometryCollection(whites)
-        else:
-            bits = random.randrange(maxn) if self.bits < 0 else self.bits
-            blacks, whites = self.draw_bits(bits, 1)
+                blacks.extend(b.geoms)
+                whites.extend(c.geoms)
+        blacks, whites = GeometryCollection(blacks), GeometryCollection(whites)
 
         l, t, r, b = GeometryCollection(list(blacks.geoms) + list(whites.geoms)).bounds
         o = (l + r) / 2, (t + b) / 2
